@@ -1,0 +1,62 @@
+DESIGN DOCUMENT
+
+CONTEXT AND SCOPE:
+This repository contains the project 3 code for the MLFQ non-preemptive scheduler using xv6.
+
+GOALS:
+To better understand the workflow and process of implementing and scheduling processes 
+in xv6. Specifically, to better understand how multi-level feedback queue scheduling can 
+be implemented. 
+--------------------------------------------------------------------------------
+
+FILES MODIFIED:
+
+proc.c - Contains the code for the scheduler, as well as the boost() method, our mechanism to avoid starvation. Also contains our changes 
+to the allocproc() method and the initialization of our queues and counter variables. In our scheduler method we loop continously and check 
+for runnable processes in each of the 3 queues, scheduling and demoting them accordingly. We also make sure to call boost each time we schedule a process
+to avoid starvation. The shifting algorithm, resetting/setting of data members for a process, as well as the actual context switching in and out of the
+process is found in the scheduler method. We also keep track of the number of instances a process has lived/been scheduled in each queue with the sched_stats array 
+and the variables num_stats_used and wait_time. In allocproc() we have the code to loop through each of the queues and find the process we are attempting 
+to schedule (so that we can remove it from the queue) before setting its initial values, adding to the end of q0 and returning the process. 
+We also added the initialization of the queue counters (c1,c2,and c3) in userinit() to ensure that these are all initialized to -1 at the start.
+
+syscall.c
+Added the sys_getpinfo function headers to syscall.c as extern ints and modified the syscalls[] table to include this newly added system call. 
+
+sysproc.c
+Added the sys_kthread functions for sys_getpinfo. We used argint to extract the first and only that getpinfo takes (the process id) argument and called our getpinfo(pid)
+from the sys_getpinfo() method. 
+
+syscall.h - added #define SYS_getpinfo 22
+
+usys.S - added SYSCALL (getpinfo)
+
+defs.h - added void boost(int) and int getpinfo(int) function signatures. 
+
+proc.h
+We added the following data members to the struct proc defintion. 
+
+  int times[3];                                 // number of times each process was scheduled at each of 3
+                                                // priority queues
+  int ticks[3];                                 // number of ticks each process used the last time it was
+                                                // scheduled in each priority queue
+                                                // cannot be greater than the time-slice for each queue
+  uint wait_time;                               // number of ticks each RUNNABLE process waited in the lowest
+                                                // priority queue
+  int num_stats_used;                           // count from 0-1500 (MAX 1500 schedulings)
+  int ticks_proc;                               // number of ticks each instance of the process has run for
+  int totalticks;                               // array that stores the total number of ticks each instance of the process has run for
+  struct sched_stat_t sched_stats[NSCHEDSTATS]; // array of sche_stat_t objects for each process (MAX 1500 schedulings)
+
+pstat.h
+We created this header file which defines the macro NSCHEDSTATS to be 1500 which is the maximum number of times a process will be scheduled.
+We also define the struct sched_stat_t which holds the last start tick of when the process was scheduled, the duration, and its priority (which queue it was in)
+
+test1.c - For test 1 we need two processes, one performing an I/O intensive job (print statements) and another containing a CPU intensive job (basic math). 
+The graph shows the parent and child alternating execution and dropping down from q0 and q1 after running once in each. Neither is ever boosted after getting demoted because they don't have to wait more than 50ms before running again.
+
+test2.c - Test 2 is somewhat simiar to test 1 except we want more processes now, so we call fork() in a loop creating 10 child processes and then performing
+an I/O intensive job, see test2Graph.pdf for a graphic of the time slices. 
+
+test3.c - Sleep in a loop, this code shows how processes are able to "cheat" the scheduler by staying in the highest priority queue, sleeping before using
+up its time slice, and staying in Q0. See the screenshot of graph 3 for the time slices. 
